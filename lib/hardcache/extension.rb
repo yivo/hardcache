@@ -11,7 +11,7 @@ module HardCache
     end
 
     module ClassMethods
-      def hardcache(namespace, &block)
+      def hardcache(namespace, cache_instances = true, &block)
         @hardcache ||= {}
         ns    = namespace
         cache = @hardcache[ns]
@@ -24,16 +24,18 @@ module HardCache
 
           Rails.logger.info "[RecordsCache] Querying #{name}"
 
-          cache[:records] = uncached do
-            block ? instance_eval(&block) : all
-          end.to_a
-
+          cache[:records] = uncached { block ? instance_eval(&block) : all }.to_a
           cache[:version] = cache[:records].map(&:cache_key).join('/')
+
+          unless cache_instances
+            cache[:records].map! { |ar| ar.respond_to?(:to_hash) ? ar.to_hash : ar.as_json }
+          end
+
           $redis.set(key, cache[:version])
         end
 
         unless hardcache_hook_defined
-          hardcache_namespaces << ns
+          hardcache_namespaces << ns # TODO Fix
 
           traits.inheritance_chain[0].after_commit do
             traits.inheritance_chain.each(&:flush_hardcache)
@@ -41,7 +43,13 @@ module HardCache
           self.hardcache_hook_defined = true
         end
 
-        cache[:records]
+        unless cache_instances
+          zero_class = traits.inheritance_chain[0]
+          cache[:records].map { |attrs| zero_class.new(attrs) }
+        else
+          cache[:records].each(&:clear_association_cache)
+          cache[:records]
+        end
       end
 
       def flush_hardcache
