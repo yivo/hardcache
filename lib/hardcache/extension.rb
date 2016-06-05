@@ -45,7 +45,8 @@ module HardCache
 
       def flush_hardcache
         keys = []
-        traits.descendants.each do |ar|
+        base = traits.inheritance_chain[0]
+        ([base] + traits.descendants).each do |ar|
           Rails.logger.info "[RecordsCache] Flushing cached records for #{ar.name}"
           ar.instance_eval do
             @hardcache = nil
