@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 module HardCache
   module Extension
     extend ActiveSupport::Concern
